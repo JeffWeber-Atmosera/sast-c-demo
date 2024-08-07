@@ -1,101 +1,119 @@
+# WebGoat.NET version 0.3
+
+## Build status
+
+![build .NET 8](https://github.com/tobyash86/WebGoat.NET/workflows/build%20.NET%208/badge.svg)
+
+## The next generation of the WebGoat example project to demonstrate OWASP TOP 10 vulnerabilities
+
+This is a re-implementation of the original [WebGoat project for .NET](https://github.com/rappayne/WebGoat.NET).
+
+This web application is a learning platform that attempts to teach about
+common web security flaws. It contains generic security flaws that apply to
+most web applications. It also contains lessons that specifically pertain to
+the .NET framework. The exercises in this app are intended to teach about 
+web security attacks and how developers can overcome them.
+
+### WARNING!: 
+THIS WEB APPLICATION CONTAINS NUMEROUS SECURITY VULNERABILITIES 
+WHICH WILL RENDER YOUR COMPUTER VERY INSECURE WHILE RUNNING! IT IS HIGHLY
+RECOMMENDED TO COMPLETELY DISCONNECT YOUR COMPUTER FROM ALL NETWORKS WHILE
+RUNNING!
+
+### Notes:
+ - Google Chrome performs filtering for reflected XSS attacks. These attacks
+   will not work unless chrome is run with the argument 
+   `--disable-xss-auditor`.
+
+## Requirements
+- .NET 8 SDK
+
+## How to build and run
+
+### 1. Running in a Docker container
+
+The provided Dockerfile is compatible with both Linux and Windows containers.  
+To build a Docker image, execute the following command:
+
+```sh
+docker build --pull --rm -t webgoat.net .
+```
+
+Please note that Linux image is already built by pipeline and can be pulled from [here](https://github.com/users/tobyash86/packages?repo_name=WebGoat.NET).
+
+#### Linux containers
+
+To run the `webgoat.net` image, execute the following command:
+
+```sh
+docker run --rm -d -p 5000:80 --name webgoat.net webgoat.net
+```
+
+WebGoat.NET website should be accessible at http://localhost:5000.
+
+#### Windows containers
+
+To run `webgoat.net` image, execute the following command:
+
+```sh
+docker run --rm --name webgoat.net webgoat.net
+```
+
+Windows containers do not support binding to localhost. To access the website, you need to provide the IP address of your Docker container. To obtain the IP, execute the following command:
+
+```sh
+docker exec webgoat.net ipconfig
+```
+The output will include the IP of the 'webgoat.net' container, for example:
+
+```
+Ethernet adapter Ethernet:
+
+   Connection-specific DNS Suffix  . : 
+   Link-local IPv6 Address . . . . . : fe80::1967:6598:124:cfa3%4
+   IPv4 Address. . . . . . . . . . . : 172.29.245.43
+   Subnet Mask . . . . . . . . . . . : 255.255.240.0
+   Default Gateway . . . . . . . . . : 172.29.240.1
+```
+
+In the above example, you can access the WebGoat.NETCore website at http://172.29.245.43.
+
+#### Stopping Docker container
+
+To stop the `webgoat.net` container, execute the following command:
+
+```sh
+docker stop webgoat.net
+```
+
+### 2. Run locally using dotnet.exe (Kestrel)
+
+1. Build and publish WebGoat.NET with the following command:
+
+```sh
+dotnet publish -c release -o ./app 
+```
+
+The web application will be deployed to the `app` folder in the current directory.
+
+2. Execute the web application on localhost with the following command:
+
+```sh
+dotnet ./app/WebGoat.NET.dll --urls=http://localhost:5000
+```
+
+The the WebGoat.NET website will be accessible at the URL specified with the `--urls` parameter: http://localhost:5000.
+
+### 3. Run using a script
+The WebGoat.NET projects ships with scripts that allow you to conveniently run the web application. The following scripts are located in the the "script" directory in the root of the project:
+- runInDocker.bat - Runs the application in a Docker container on Windows.
+- runInDocker.sh - Runs the application in a Docker container on Linux.
+- runLocal.bat - Runs the application locally on Windows.
+- runLocal.sh - Runs the application locally on Linux.
+
+## Known issues:
+
+1. The latest OWASP Top 10 is not covered. The uncovered vulnerabilities need to be added to the code base.
+2. Educational documents/trainings for any categories of the latest OWASP Top 10 are not available.
 
 
-  
-# CodeThreat - SAST Benchmark Tool for Web Application Security
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
-
-
-
-<!-- PROJECT LOGO -->
-<br />
-<p align="center">
-  <a href="https://codethreat.com">
-    <img src="https://www.codethreat.com/_next/static/media/ct-logo.0cc6530f.svg" alt="Logo" width="259" height="39">
-  </a>
-
-  <h3 align="center">IssueBlot.NET</h3>
-
-</p>
-
-
-## CodeThreat - SAST Benchmark
-
-IssueBlot.Net is a purposely vulnerable C# application, designed for benchmarking Static Application Security Testing (SAST) tools. This project is inspired by similar projects like WebGoat.NET, and it aims to provide a platform for security enthusiasts and developers to learn about and test the capabilities of various SAST tools.
-
-While there are other vulnerable applications like OWASP Benchmark, Juiceshop, DVWA that contain a variety of vulnerabilities, IssueBlot.Net offers a unique set of challenges focused solely on C# codebase. By providing a comprehensive set of C# specific vulnerabilities, we aim to help security enthusiasts and developers test and improve the effectiveness of their SAST tools.
-
-## Usage
-
-Use IssueBlot.Net to benchmark the effectiveness of SAST tools. Please note that this application is intentionally vulnerable and should not be deployed in any sensitive or production environment.
-
-Here are some example vulnerabilities found in the project:
-
-### CoreStandaloneBlot
-
--   Command Injection in `Bulk/CommandInjection1.cs`:  allows an attacker to execute arbitrary commands on the server through user-controlled input.
--   Directory Traversal in `Bulk/DirectoryTraversal1.cs`:  permits an attacker to access files outside the intended directory structure.
--   SQL Injection in `Bulk/SQLInjection1.cs`:  occurs when user-supplied input is not properly validated or sanitized, leading to unauthorized database queries.
--   Insecure Password-Based Encryption (PBE) Work Factor in `Cryptography/InsecurePBEWorkFactor1.cs`:  weakens the encryption strength by using an inadequate work factor for password-based encryption.
--   Deserialization Vulnerability using BinaryFormatter in `Deserialization/BinaryFormatterDS.cs`:  arises when untrusted data is deserialized, potentially leading to remote code execution or other attacks.
-
-### NETMVCBlot
-
--   Command Injection in `Controllers/CodeInjectionController.cs`:  allows an attacker to execute arbitrary commands on the server through user-controlled input.
--   SQL Injection in `Controllers/SQLInjController.cs`:  occurs when user-supplied input is not properly validated or sanitized, leading to unauthorized database queries.
--   Server-Side Request Forgery (SSRF) in `Controllers/SSRFController.cs`:  enables an attacker to make unauthorized requests to internal network resources.
-
-### NETStandaloneBlot
-
--   Basic Authentication Vulnerability in `Authentication/BasicAuthentication1.cs`: allows authentication credentials to be transmitted without proper encryption or protection.
--   Insecure Cryptographic Practices in `Cryptography/CustomSSLValidation1.cs`:  arises from insecure usage of cryptographic functions, weakening the overall security.
--   Deserialization Vulnerability using FastJson in `Deserialization/FastJsonDeserialization.cs`:  occurs when untrusted data is deserialized using the FastJson library, potentially leading to remote code execution or other attacks.
--   Code Injection in `Injection/CodeInjection.cs`:  allows an attacker to inject and execute arbitrary code within the application context.
--   XML External Entity (XXE) Injection in `Other/XXE1.cs`:  allows the parsing of XML input with external entities, leading to potential data disclosure or denial-of-service attacks.
-
-
-### NETWebFormsBlot
-
--   Client-Side Code Injection in `ClientSideCodeInj.aspx.cs`:  enables an attacker to inject and execute arbitrary code on the client-side.
--   Insecure File Upload in `HttpFileCase.aspx.cs`:  allows an attacker to upload malicious files, potentially leading to remote code execution or unauthorized access.
--   Parameter Overloading in `ParameterOverloading.aspx.cs`: occurs when multiple methods with the same name but different parameter lists are defined, potentially leading to confusion or unexpected behavior.
-
-Please note that this project may have additional vulnerabilities beyond the ones listed here. The purpose of this benchmark project is to demonstrate and raise awareness about common web application vulnerabilities.
-
-## Frameworks Used in the Project
-
-The benchmark project "Issublot" utilizes several popular web application frameworks for development. These frameworks provide a foundation for building robust and scalable web applications. The frameworks used in this project include:
-
-1.  ASP.NET Core MVC:
-2.  ASP.NET Web Forms
-3.  ASP.NET Web API
-4.  WCF (Windows Communication Foundation)
-## Contributing
-
-We welcome contributions to IssueBlot.Net. If you have found a bug, want to suggest a feature, or want to propose a vulnerability scenario, please open an issue.
-
-For code contributions, please fork the repository, make your changes, and submit a pull request.
-
-## Disclaimer
-
-IssueBlot.Net is intentionally vulnerable for educational purposes. We disclaim any liability for misuse of this software.
-
-## Contact
-
-For any questions or discussions, please open an issue on this repository, and we'll get back to you as soon as possible.
-
-  
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[forks-shield]: https://img.shields.io/github/forks/CodeThreat/IssueBlot.NET.svg?style=flat-square
-[forks-url]: https://github.com/CodeThreat/IssueBlot.NET/network/members
-[stars-shield]: https://img.shields.io/github/stars/CodeThreat/IssueBlot.NET.svg?style=flat-square
-[stars-url]: https://github.com/CodeThreat/IssueBlot.NET/stargazers
-[issues-shield]: https://img.shields.io/github/issues/CodeThreat/IssueBlot.NET.svg?style=flat-square
-[issues-url]: https://github.com/othneildrew/IssueBlot.NET/issues
-[license-shield]: https://img.shields.io/github/license/CodeThreat/IssueBlot.NET.svg?style=flat-square
-[license-url]: https://github.com/CodeThreat/IssueBlot.NET/blob/main/LICENSE
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=flat-square&logo=linkedin&colorB=555
-[linkedin-url]: https://www.linkedin.com/company/codethreat

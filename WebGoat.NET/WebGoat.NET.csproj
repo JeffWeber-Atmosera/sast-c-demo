@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <UserSecretsId>669676e4-410e-47bc-a260-8c851a25b590</UserSecretsId>
     <GenerateProgramFile>false</GenerateProgramFile>
+    <Features>use-rosolyn-tokenizer</Features>
   </PropertyGroup>
 
   <ItemGroup>

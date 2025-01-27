@@ -9,5 +9,5 @@
 x64/
 app/
 packages
-.vscode/
+.vscode/*
 *.sarif

@@ -1,4 +1,4 @@
-name: build .NET 8
+name: build .NET 9
 
 on:
   push:

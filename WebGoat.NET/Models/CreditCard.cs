@@ -171,27 +171,27 @@ namespace WebGoatCore.Models
 
         private void WriteCreditCardFile(XDocument xmlDocument)
         {
-            try
-            {
-                using (var writeStream = File.Open(Filename, FileMode.Create))
-                {
-                    var writer = new StreamWriter(writeStream);
-                    xmlDocument.Save(writer);
-                    writer.Close();
-                }
-            }
-            catch (FileNotFoundException)    //File does not exist - Create it.
-            {
-                CreateNewCreditCardFile();
-            }
-            catch (IndexOutOfRangeException)     //File exists but has nothing in in.
-            {
-                CreateNewCreditCardFile();
-            }
-            catch (XmlException)     //File is corrupt. Delete and recreate.
-            {
-                CreateNewCreditCardFile();
-            }
+            // try
+            // {
+            //     using (var writeStream = File.Open(Filename, FileMode.Create))
+            //     {
+            //         var writer = new StreamWriter(writeStream);
+            //         xmlDocument.Save(writer);
+            //         writer.Close();
+            //     }
+            // }
+            // catch (FileNotFoundException)    //File does not exist - Create it.
+            // {
+            //     CreateNewCreditCardFile();
+            // }
+            // catch (IndexOutOfRangeException)     //File exists but has nothing in in.
+            // {
+            //     CreateNewCreditCardFile();
+            // }
+            // catch (XmlException)     //File is corrupt. Delete and recreate.
+            // {
+            //     CreateNewCreditCardFile();
+            // }
         }
 
         private bool CardExistsForUser()

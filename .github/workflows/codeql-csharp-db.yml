@@ -1,11 +1,12 @@
 name: CodeQL C# (manual DB publish)
 
 on:
-  workflow_dispatch: # run by hand for your demo
+  workflow_dispatch:
 
 permissions:
   security-events: write
-  contents: write
+  contents: write # for release upload
+  actions: read
 
 jobs:
   analyze:
@@ -19,37 +20,47 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x' # WebGoat.NET requires .NET 8
+          dotnet-version: '8.0.x'
 
-      - name: Initialize CodeQL
+      - name: Initialize CodeQL (C#)
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
           build-mode: manual
 
-      # Build the solution (no tests). If your .sln name changes, edit the path.
-      - name: Restore & Build
+      - name: Restore & Build (Release, no tests)
         run: |
           dotnet restore WebGoat.NET.sln
           dotnet build WebGoat.NET.sln -c Release --no-restore
 
-      - name: Perform CodeQL analysis
+      - name: Run CodeQL analysis
         id: analyze
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:csharp'
-          upload: true # sends SARIF to Security tab
+          upload: true
 
-      - name: Install jq (for reading db-locations)
+      - name: Show analyze outputs (debug)
+        run: |
+          echo "db-locations JSON from analyze step:"
+          echo '${{ steps.analyze.outputs.db-locations }}'
+
+      - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # Bundle the C# database created by analyze and publish it as an artifact
       - name: Bundle CodeQL DB
         run: |
+          set -euo pipefail
           echo '${{ steps.analyze.outputs.db-locations }}' > dblocations.json
-          DB_PATH=$(jq -r '.csharp' dblocations.json)
-          tar -czf codeql-db-csharp.tgz -C "$(dirname "$DB_PATH")" "$(basename "$DB_PATH")"
-          du -h codeql-db-csharp.tgz
+          DB_PATH=$(jq -r '.csharp // empty' dblocations.json || true)
+          if [ -z "$DB_PATH" ]; then
+            echo "::error::No C# database path found in db-locations output"; cat dblocations.json; exit 1
+          fi
+          echo "Resolved CodeQL DB path: $DB_PATH"
+          # Tarball alongside workspace root
+          TAR=codeql-db-csharp.tgz
+          tar -czf "$TAR" -C "$(dirname "$DB_PATH")" "$(basename "$DB_PATH")"
+          ls -lh "$TAR"
 
       - name: Upload DB artifact (90 days)
         uses: actions/upload-artifact@v4
@@ -57,3 +68,17 @@ jobs:
           name: codeql-db-csharp
           path: codeql-db-csharp.tgz
           retention-days: 90
+
+      # Optional: publish a Release asset for a permanent public download
+      - name: Publish Release with DB (optional)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="db-${GITHUB_SHA}"
+          ASSET="codeql-db-csharp.tgz"
+          gh release create "$TAG" "$ASSET" \
+            --title "CodeQL DB (C#) $TAG" \
+            --notes "Generated from $GITHUB_SHA" || \
+          gh release upload "$TAG" "$ASSET" --clobber

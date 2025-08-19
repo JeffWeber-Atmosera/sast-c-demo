@@ -1,11 +1,11 @@
-name: CodeQL C# (manual DB publish)
+name: CodeQL C# (manual DB publish with db-latest alias)
 
 on:
   workflow_dispatch:
 
 permissions:
   security-events: write
-  contents: write # for release upload
+  contents: write # needed for gh release create/upload
   actions: read
 
 jobs:
@@ -45,10 +45,13 @@ jobs:
           echo "db-locations JSON from analyze step:"
           echo '${{ steps.analyze.outputs.db-locations }}'
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install jq and zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq zip
 
       - name: Bundle CodeQL DB
+        id: bundle
         run: |
           set -euo pipefail
           echo '${{ steps.analyze.outputs.db-locations }}' > dblocations.json
@@ -57,28 +60,80 @@ jobs:
             echo "::error::No C# database path found in db-locations output"; cat dblocations.json; exit 1
           fi
           echo "Resolved CodeQL DB path: $DB_PATH"
-          # Tarball alongside workspace root
           TAR=codeql-db-csharp.tgz
           tar -czf "$TAR" -C "$(dirname "$DB_PATH")" "$(basename "$DB_PATH")"
+          echo "tarball=$TAR" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$TAR" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           ls -lh "$TAR"
 
       - name: Upload DB artifact (90 days)
         uses: actions/upload-artifact@v4
         with:
           name: codeql-db-csharp
-          path: codeql-db-csharp.tgz
+          path: ${{ steps.bundle.outputs.tarball }}
           retention-days: 90
 
-      # Optional: publish a Release asset for a permanent public download
-      - name: Publish Release with DB (optional)
-        if: always()
+      - name: Publish versioned release asset
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           TAG="db-${GITHUB_SHA}"
-          ASSET="codeql-db-csharp.tgz"
-          gh release create "$TAG" "$ASSET" \
-            --title "CodeQL DB (C#) $TAG" \
-            --notes "Generated from $GITHUB_SHA" || \
-          gh release upload "$TAG" "$ASSET" --clobber
+          ASSET="${{ steps.bundle.outputs.tarball }}"
+          TITLE="CodeQL DB (C#) ${TAG}"
+          NOTES="SHA256: ${{ steps.bundle.outputs.sha256 }}"
+          # Create (or update) the versioned release with the asset
+          gh release create "$TAG" "$ASSET" --repo "$REPO" --title "$TITLE" --notes "$NOTES" || \
+          gh release upload "$TAG" "$ASSET" --repo "$REPO" --clobber
+          echo "versioned_url=https://github.com/${REPO}/releases/download/${TAG}/$(basename "$ASSET")" >> "$GITHUB_ENV"
+
+      - name: Update db-latest alias
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          ALIAS="db-latest"
+          ASSET="${{ steps.bundle.outputs.tarball }}"
+
+          # If alias exists, remove existing assets to avoid duplicates; then upload new one.
+          if gh release view "$ALIAS" --repo "$REPO" >/dev/null 2>&1; then
+            EXIST=$(gh release view "$ALIAS" --repo "$REPO" --json assets -q '.assets[].name' || true)
+            for A in $EXIST; do gh release delete-asset "$ALIAS" "$A" --repo "$REPO" -y || true; done
+            gh release upload "$ALIAS" "$ASSET" --repo "$REPO" --clobber
+          else
+            gh release create "$ALIAS" "$ASSET" --repo "$REPO" \
+              --title "CodeQL DB (latest)" \
+              --notes "Alias to the most recent CodeQL DB"
+          fi
+          echo "alias_url=https://github.com/${REPO}/releases/download/${ALIAS}/$(basename "$ASSET")" >> "$GITHUB_ENV"
+
+      - name: Post handy download commands (run summary)
+        env:
+          VERSIONED_URL: ${{ env.versioned_url }}
+          ALIAS_URL: ${{ env.alias_url }}
+        run: |
+          {
+            echo "### Download & extract"
+            echo ""
+            echo "**Stable alias (recommended):**"
+            echo "\`\`\`bash"
+            echo "curl -fL -o codeql-db-csharp.tgz \\"
+            echo "  ${ALIAS_URL}"
+            echo "tar -xzf codeql-db-csharp.tgz"
+            echo "\`\`\`"
+            echo ""
+            echo "**Specific version (this run):**"
+            echo "\`\`\`bash"
+            echo "curl -fL -o codeql-db-csharp.tgz \\"
+            echo "  ${VERSIONED_URL}"
+            echo "tar -xzf codeql-db-csharp.tgz"
+            echo "\`\`\`"
+            echo ""
+            echo "**GitHub CLI (alias):**"
+            echo "\`\`\`bash"
+            echo "gh release download db-latest --repo $GITHUB_REPOSITORY --pattern codeql-db-csharp.tgz"
+            echo "tar -xzf codeql-db-csharp.tgz"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

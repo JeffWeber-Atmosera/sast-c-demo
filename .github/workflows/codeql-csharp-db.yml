@@ -1,115 +1,59 @@
-name: CodeQL C/C++ (manual + hash-gated DB publish)
+name: CodeQL C# (manual DB publish)
 
 on:
   workflow_dispatch: # run by hand for your demo
-  push:
-    branches: [main] # optional: keep if you want auto-updates
 
 permissions:
   security-events: write
-  contents: write # needed for gh release uploads
-  actions: read
+  contents: write
 
 jobs:
   analyze:
+    name: Build, Analyze, and Publish DB
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # Gate all expensive work on a source hash cache.
-      # NOTE: hashFiles() is valid here (in 'with.key'), but NOT in env.
-      - name: Cache DB by source hash (probe)
-        id: cache-db
-        uses: actions/cache@v4
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
-          path: .codeql-db-cache
-          key: db-${{ hashFiles('**/*.c','**/*.cc','**/*.cpp','**/*.cxx','**/*.h','**/*.hh','**/*.hpp','**/*.hxx','**/CMakeLists.txt','**/Makefile','**/*.mk','**/configure','**/configure.ac','**/configure.in') }}
+          dotnet-version: '8.0.x' # WebGoat.NET requires .NET 8
 
       - name: Initialize CodeQL
-        if: steps.cache-db.outputs.cache-hit != 'true'
         uses: github/codeql-action/init@v3
         with:
-          languages: cpp
+          languages: csharp
+          build-mode: manual
 
-      # C/C++: try to build automatically across common systems (Make/CMake/etc.)
-      - name: Autobuild
-        if: steps.cache-db.outputs.cache-hit != 'true'
-        uses: github/codeql-action/autobuild@v3
+      # Build the solution (no tests). If your .sln name changes, edit the path.
+      - name: Restore & Build
+        run: |
+          dotnet restore WebGoat.NET.sln
+          dotnet build WebGoat.NET.sln -c Release --no-restore
 
-      - name: Perform CodeQL Analysis
-        if: steps.cache-db.outputs.cache-hit != 'true'
+      - name: Perform CodeQL analysis
         id: analyze
         uses: github/codeql-action/analyze@v3
         with:
-          category: '/language:cpp'
-          upload: true # uploads SARIF to the Security tab
+          category: '/language:csharp'
+          upload: true # sends SARIF to Security tab
 
-      - name: Install jq (for parsing analyze outputs)
-        if: steps.cache-db.outputs.cache-hit != 'true'
+      - name: Install jq (for reading db-locations)
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # Bundle the CodeQL DB emitted by the action and upload it
+      # Bundle the C# database created by analyze and publish it as an artifact
       - name: Bundle CodeQL DB
-        if: steps.cache-db.outputs.cache-hit != 'true'
         run: |
           echo '${{ steps.analyze.outputs.db-locations }}' > dblocations.json
-          DB_PATH=$(jq -r '.cpp' dblocations.json)
-          tar -czf codeql-db-cpp.tgz -C "$(dirname "$DB_PATH")" "$(basename "$DB_PATH")"
-          mkdir -p .codeql-db-cache && cp codeql-db-cpp.tgz .codeql-db-cache/
-          du -h codeql-db-cpp.tgz
+          DB_PATH=$(jq -r '.csharp' dblocations.json)
+          tar -czf codeql-db-csharp.tgz -C "$(dirname "$DB_PATH")" "$(basename "$DB_PATH")"
+          du -h codeql-db-csharp.tgz
 
-      - name: Upload DB as artifact (90 days)
-        if: steps.cache-db.outputs.cache-hit != 'true'
+      - name: Upload DB artifact (90 days)
         uses: actions/upload-artifact@v4
         with:
-          name: codeql-db-cpp
-          path: codeql-db-cpp.tgz
+          name: codeql-db-csharp
+          path: codeql-db-csharp.tgz
           retention-days: 90
-
-      # Optional: publish a permanent Release asset whenever the source hash changes
-      - name: Compute source hash (for release tag)
-        if: steps.cache-db.outputs.cache-hit != 'true'
-        id: src
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Hash only typical C/C++ sources and build descriptors:
-          files=$(git ls-files -- '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' 'CMakeLists.txt' 'Makefile' '*.mk' 'configure' 'configure.ac' 'configure.in') || true
-          if [ -z "$files" ]; then
-            echo "hash=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          else
-            HASH=$(printf "%s\n" "$files" | xargs -r sha256sum | sha256sum | cut -d' ' -f1)
-            echo "hash=$HASH" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish Release with DB
-        if: steps.cache-db.outputs.cache-hit != 'true'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          TAG="db-${{ steps.src.outputs.hash }}"
-          ALIAS="db-latest"
-          gh release create "$TAG" codeql-db-cpp.tgz \
-            --title "CodeQL DB (C/C++) - $TAG" \
-            --notes "Source hash: ${{ steps.src.outputs.hash }}" || \
-          gh release upload "$TAG" codeql-db-cpp.tgz --clobber
-
-          # keep an alias pointing to the latest DB
-          if gh release view "$ALIAS" >/dev/null 2>&1; then
-            # replace asset
-            EXIST=$(gh release view "$ALIAS" --json assets -q '.assets[].name' || true)
-            for A in $EXIST; do gh release delete-asset "$ALIAS" "$A" -y || true; done
-            gh release upload "$ALIAS" codeql-db-cpp.tgz --clobber
-          else
-            gh release create "$ALIAS" codeql-db-cpp.tgz \
-              --title "CodeQL DB (latest)" \
-              --notes "Alias to most recent DB. Source hash: ${{ steps.src.outputs.hash }}"
-          fi
-
-      - name: No change; reusing cached DB (no-op)
-        if: steps.cache-db.outputs.cache-hit == 'true'
-        run: echo "Source unchanged; skipping DB rebuild & publish."

@@ -1,0 +1,108 @@
+name: CodeQL C# (manual, hash-gated DB publish)
+
+on:
+  workflow_dispatch: # run by hand for workshops
+  push:
+    branches: [main] # optional: keep if you want auto-updates
+
+permissions:
+  contents: write # needed if you publish a Release with gh
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Build, Analyze, and (if changed) Publish DB
+    runs-on: ubuntu-latest
+
+    env:
+      # A single hash over all files that affect a C# build
+      SOURCE_HASH: ${{ hashFiles('**/*.sln','**/*.csproj','**/*.props','**/*.targets','**/*.cs','**/*.cshtml','**/*.razor','**/*.config','Directory.Build.*') }}
+      DB_TARBALL: codeql-db-csharp.tgz
+      RELEASE_TAG: db-${{ github.sha }} # versioned
+      RELEASE_ALIAS: db-latest # pointer to "latest" DB
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Cache key is the hash of the source; cache-hit=true means nothing changed
+      - name: Cache DB by source hash (probe)
+        id: cache-db
+        uses: actions/cache@v4
+        with:
+          path: .codeql-db-cache
+          key: db-${{ env.SOURCE_HASH }}
+
+      - name: Initialize CodeQL
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: manual
+
+      - name: Restore & Build (Release)
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        run: |
+          dotnet restore WebGoat.NET.sln
+          dotnet build WebGoat.NET.sln -c Release --no-restore
+
+      - name: Analyze (create CodeQL DB + SARIF)
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        id: analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:csharp'
+          upload: true
+
+      - name: Bundle DB (from analyze output)
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        run: |
+          echo '${{ steps.analyze.outputs.db-locations }}' > dblocations.json
+          DB_PATH=$(jq -r '.csharp' dblocations.json)
+          mkdir -p .codeql-db-cache
+          tar -czf $DB_TARBALL -C "$(dirname "$DB_PATH")" "$(basename "$DB_PATH")"
+          # save a copy under the cache path so future runs can skip work completely
+          cp $DB_TARBALL .codeql-db-cache/$DB_TARBALL
+          du -h $DB_TARBALL
+
+      - name: Upload DB as artifact (90 days)
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-db-csharp
+          path: ${{ env.DB_TARBALL }}
+          retention-days: 90
+
+      # Optional: publish a "versioned" release and retarget an alias
+      - name: Create versioned release with asset
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        run: |
+          gh release create "${{ env.RELEASE_TAG }}" "${{ env.DB_TARBALL }}" \
+            --title "CodeQL DB (${{ github.sha }})" \
+            --notes "Source hash: ${{ env.SOURCE_HASH }}"
+      - name: Update alias release (db-latest) to point to newest DB
+        if: steps.cache-db.outputs.cache-hit != 'true'
+        run: |
+          # Recreate db-latest to always contain the newest asset
+          if gh release view "${{ env.RELEASE_ALIAS }}" >/dev/null 2>&1; then
+            ASSETS=$(gh release view "${{ env.RELEASE_ALIAS }}" --json assets -q '.assets[].name')
+            for A in $ASSETS; do gh release delete-asset "${{ env.RELEASE_ALIAS }}" "$A" -y; done
+            gh release upload "${{ env.RELEASE_ALIAS }}" "${{ env.DB_TARBALL }}" --clobber
+          else
+            gh release create "${{ env.RELEASE_ALIAS }}" "${{ env.DB_TARBALL }}" \
+              --title "CodeQL DB (latest)" \
+              --notes "Alias to most recent DB. Source hash: ${{ env.SOURCE_HASH }}"
+          fi
+
+      - name: Nothing changed; reuse cached DB (no-op)
+        if: steps.cache-db.outputs.cache-hit == 'true'
+        run: |
+          echo "Source unchanged (hash=${{ env.SOURCE_HASH }}). Skipping DB rebuild & publish."

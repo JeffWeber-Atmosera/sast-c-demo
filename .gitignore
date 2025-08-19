@@ -1,3 +1,4 @@
+# Ignores
 .vs
 *.suo
 *.user
@@ -11,3 +12,6 @@ app/
 packages
 .vscode/*
 *.sarif
+
+# Un-ignores
+!.vscode/extensions.json

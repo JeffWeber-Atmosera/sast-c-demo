@@ -12,6 +12,7 @@ app/
 packages
 .vscode/*
 *.sarif
+databases/
 
 # Un-ignores
 !.vscode/extensions.json

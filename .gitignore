@@ -14,6 +14,7 @@ packages
 *.sarif
 databases/
 .DS_Store
+packs/
 
 # Un-ignores
 !.vscode/extensions.json

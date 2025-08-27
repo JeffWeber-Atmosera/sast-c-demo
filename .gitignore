@@ -15,6 +15,7 @@ packages
 databases/
 .DS_Store
 packs/
+db-results/
 
 # Un-ignores
 !.vscode/extensions.json

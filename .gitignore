@@ -15,6 +15,7 @@ packages
 databases/
 .DS_Store
 packs/
+suites/
 db-results/
 
 # Un-ignores

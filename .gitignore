@@ -17,6 +17,7 @@ databases/
 packs/
 suites/
 db-results/
+tests/
 
 # Un-ignores
 !.vscode/extensions.json
